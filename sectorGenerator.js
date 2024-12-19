@@ -2,9 +2,184 @@ function rand(max, min) {
     return Math.floor(Math.random() * (max - (min ?? 1) + 1)) + (min ?? 1);
 }
 
-function generatePlanetCharacteristics(type) {
-    let characteristiche = {};
+function atm(d, bonus) {
+    return {
+        tipo: TipoAtmosfera(),
+        densità: DensitàAtmosfera(d, (bonus ?? 0)),
+        opaca: AtmOpaca(),
+    };
+}
 
+function atmGassous() {
+    let types = ["Tossica", "Corrosiva", "Tossica e corrosiva"];
+    return {
+        tipo: types[rand(2, 0)],
+        densità: "Pesante (2.7+ atm) Vedi “Pressioni Estreme”",
+        opaca: true
+    };
+}
+
+function createDwarf(type, ideale, orbita) {
+    let dwarf = {
+        tipo: type,
+        naturalResouces: naturalResouces(),
+        radioattività: radioattività(),
+        peculiaritàAggiuntive: peculiaritàAggiuntive(),
+        atmosfera: atm(4),
+        geologia: GeologiaTerrestri()
+    }
+    dwarf.atmosfera.serra = AtmSerra(dwarf.atmosfera);
+    dwarf.temperatura = Temp(dwarf, ideale);
+    dwarf.dimensioni = generatePlanetDimensions(dwarf.tipo);
+    dwarf.dimensioni.gravita = generateGravity(dwarf.dimensioni);
+    dwarf.idrosfera = idrosfera(dwarf, ideale, orbita);
+    dwarf.biosfera = biosfera(dwarf);
+    
+    return dwarf;
+}
+
+function createGas(planet) {
+    planet.radioattività = radioattività();
+    planet.peculiaritàAggiuntive = peculiaritàAggiuntive();
+    planet.naturalResouces = naturalGasses();
+    planet.temperatura = "Ghiacciata (inferiore a -70 °C), Vedi “Temperature Estreme”";
+    planet.atmosfera = atmGassous();
+    return planet;
+}
+
+function createTerrestrial() {
+    let planet = { 
+        pianeta: "Terrestre",
+        anelli: rand(100) >= 15,
+        radioattività: radioattività(),
+        NSatellitiMaggiori: rand(2) - 1,
+        SatellitiMinori: rand(6),
+        peculiaritàAggiuntive: peculiaritàAggiuntive()
+    };
+    return planet
+    }
+  
+function createPlanet(ideale = [-1], orbita) {
+    let planet = {}
+    let dice = rand(10);
+    let Sdice = rand(10);
+    switch (true) {
+        case dice <= 4:
+            planet = { pianeta: "Gassoso" };
+            planet = createGas(planet);
+            switch (true) {
+                case Sdice <= 2:
+                    planet.tipo = "Nano Gassoso";
+                    planet.anelli = rand(100) <= 20;
+                    planet.NSatellitiMaggiori = rand(3);
+                    planet.SatellitiMinori = rand(12, 2);
+                    break;
+                case Sdice >= 3 && Sdice <= 6:
+                    planet.tipo = "Gigante Ghiacciato";
+                    planet.anelli = rand(100) <= 35;
+                    planet.NSatellitiMaggiori = rand(6);
+                    planet.SatellitiMinori = rand(24, 4);
+                    break;
+                case Sdice >= 7 && Sdice <= 10:
+                    planet.tipo = "Gigante Standard";
+                    planet.anelli = rand(2) == 1;
+                    planet.NSatellitiMaggiori = rand(8);
+                    planet.SatellitiMinori = rand(48, 6);
+                    break;
+            }
+            break;
+        case dice >= 5 && dice <= 8:
+            planet = createTerrestrial();
+            planet.naturalResouces = naturalResouces(); // spostare dopo biosfera per fix
+            switch (true) {
+                case Sdice <= 2:
+                    planet.tipo = "Pianeta Ferroso";
+                    planet.geologia = GeologiaTerrestri();
+                    planet.atmosfera = atm(6);
+                    break;
+                case Sdice >= 3 && Sdice <= 7:
+                    planet.tipo = "Pianeta Roccioso";
+                    planet.geologia = GeologiaTerrestri();
+                    planet.atmosfera = atm(6);
+                    break;
+                case Sdice >= 8 && Sdice <= 10:
+                    planet.tipo = "Pianeta Oceanico";
+                    planet.atmosfera = atm(4, 2);
+                    break;
+            }
+            planet.atmosfera.serra = AtmSerra(planet.atmosfera);
+            planet.dimensioni = generatePlanetDimensions(planet.tipo);
+            break;
+        case dice >= 9 && dice <= 10:
+            planet = { pianeta: "Cintura di Asteroidi" };
+            planet.PianetiNani = {};
+            for (let f = 1; f <= rand(10); f++) {
+                let type = determinateDwarfs()
+                planet.PianetiNani[f] = createDwarf(type, ideale, orbita);
+            }
+            break;
+    }
+    if (planet.pianeta != "Cintura di Asteroidi") {
+        planet.SatellitiMaggiori = [];
+        for(let s = 0; s < planet.NSatellitiMaggiori; s++) {
+            let type = determinateDwarfs();
+            planet.SatellitiMaggiori[s] = createDwarf(type, ideale, orbita);
+        }
+        
+        if(!planet.pianeta.includes("Gassoso")) {
+            planet.temperatura = Temp(planet, ideale);
+            if(!planet.tipo.includes("Oceanico"))
+                planet.idrosfera = idrosfera(planet, ideale, orbita);
+            planet.biosfera = biosfera(planet);
+        }
+    }
+    return planet;
+}
+
+function determinateDwarfs() {
+    return (rand(6) % 2 == 0) ? "Nano Roccioso" : "Nano Ghiacciato";
+}
+
+function generateGravity(dimensions) {
+    return (Number)((dimensions.Massa / Math.pow(dimensions.Raggio, 2)).toFixed(2));
+}
+
+function generatePlanetDimensions(type) {
+    let dimensioni = { // min - max / step
+        "Nano Gassoso": {
+            "Massa": rand(3, 10), // 3 - 10 / 1 
+            "Raggio": (rand(20, 35)/10), // 2 - 3.5 / 0.1
+        },
+        "Gigante Ghiacciato": {
+            "Massa": rand(3, 10), // 10 - 50 / 1
+            "Raggio": (rand(20, 35)/10), // 3 - 6 / 0.1 
+        },
+        "Gigante Standard": {
+            "Massa": rand(50, 900), // 50 - 900 / 1
+            "Raggio": (rand(60, 120)/10), // 6 - 12 / 0.1
+        },
+        "Pianeta Ferroso": {
+            "Massa": rand(1, 8)/10, // 0.1 - 0.8 / 0.1
+            "Raggio": (rand(2, 5)/10), // 0.2 - 0.5 / 0.1
+        },
+        "Pianeta Roccioso": {
+            "Massa": rand(2, 35)/10, // 0.2 - 3.5 / 0.1
+            "Raggio": (rand(4, 15)/10), // 0.4 - 1.5 / 0.1
+        },
+        "Pianeta Oceanico": {
+            "Massa": rand(12, 60)/10, // 1.2 - 6 / 0.1
+            "Raggio": (rand(14, 25)/10), // 1.4 - 2.5 / 0.1
+        },
+        "Nano Ghiacciato": {
+            "Massa": rand(1, 4)/100, // 0.01 - 0.4 / 0.1
+            "Raggio": (rand(5, 30)/100), // 0.05 - 0.3 / 0.01
+        },
+        "Nano Roccioso": {
+            "Massa": rand(5, 10)/100, // 0.05 - 1 / 0.01
+            "Raggio": (rand(5, 30)/100), // 0.05 - 0.3 / 0.01
+        }
+    };
+    return dimensioni[type];
 }
 
 function swapWithPrevious(arr, index) {
@@ -40,35 +215,37 @@ function findModBio(pianeta) {
     let mod = 0;
 
     if (pianeta.atmosfera.densità.includes("Assente"))
-        mod = - 3;
+        mod =- 3;
 
     if (pianeta.temperatura.includes("Rovente") || pianeta.temperatura.includes("Ghiacciata"))
-        mod = - 3;
+        mod =- 3;
     if (pianeta.temperatura.includes("Torrida") || pianeta.temperatura.includes("Gelida"))
-        mod = - 1;
+        mod =- 1;
 
     switch (true) {
         case pianeta.atmosfera.tipo.includes("Standard"):
-            mod = + 1;
+            mod =+ 1;
             break;
         case pianeta.atmosfera.tipo.includes("Tossica"):
         case pianeta.atmosfera.tipo.includes("Corrosiva"):
-            mod = - 1;
+            mod =- 1;
             break;
     }
+    if(!pianeta.tipo.includes("Oceanico"))
+        switch (true) {
+            case pianeta.idrosfera.includes("Acqua praticamente assente"):
+                mod =- 3;
+            case pianeta.idrosfera.includes("Grandi bacini"):
+            case pianeta.idrosfera.includes("Oceani e terre emerse"):
+            case pianeta.idrosfera.includes("Immensi oceani"):
+            case pianeta.idrosfera.includes("Pantalassico"):
+                mod =+ 2;
+        }   
+    else 
+        mod += 2;
 
-    switch (true) {
-        case pianeta.idrosfera.includes("Acqua praticamente assente"):
-            mod = -3;
-        case pianeta.idrosfera.includes("Grandi bacini"):
-        case pianeta.idrosfera.includes("Oceani e terre emerse"):
-        case pianeta.idrosfera.includes("Immensi oceani"):
-        case pianeta.idrosfera.includes("Pantalassico"):
-        case pianeta.idrosfera.includes("Tutta"):
-            mod = + 2;
-    }
     if (pianeta.radioattività.includes("Elevato") || pianeta.radioattività.includes("Estremo"))
-        mod = - 2;
+        mod =- 2;
     return mod;
 }
 
@@ -91,33 +268,33 @@ function biosfera(pianeta) {
 function findModIdro(pianeta, ideale, orbita) {
     let mod = 0;
     if (orbita < ideale[0])
-        mod = - 3;
+        mod =- 3;
     else if (orbita >= ideale[0] && orbita <= ideale[ideale.length])
-        mod = + 1;
+        mod =+ 1;
     else
-        mod = - 2;
+        mod =- 2;
 
     switch (true) {
         case pianeta.atmosfera.densità.includes("Assente"):
-            mod = - 999;
+            mod =- 999;
             break;
         case pianeta.atmosfera.densità.includes("Rarefatta"):
         case pianeta.atmosfera.densità.includes("Tenue"):
-            mod = - 2;
+            mod =- 2;
             break;
         case pianeta.atmosfera.densità.includes("Densa"):
         case pianeta.atmosfera.densità.includes("Pesante"):
-            mod = + 1;
+            mod =+ 1;
             break;
     }
     switch (true) {
         case (pianeta.temperatura).includes("Torrida"):
         case (pianeta.temperatura).includes("Gelida"):
-            mod = - 3;
+            mod =- 3;
             break;
         case (pianeta.temperatura).includes("Rovente"):
         case (pianeta.temperatura).includes("Ghiacciata"):
-            mod = - 999;
+            mod =- 999;
             break;
     }
 
@@ -142,10 +319,8 @@ function idrosfera(pianeta, ideale) {
             return "Oceani e terre emerse in proporzioni più o meno bilanciate, reticoli idrografici molto ben sviluppati.;"
         case val == 5:
             return "Immensi oceani che circondano masse isolate di terre emerse; reticoli idrografici pervasivi.";
-        case val >= 6 && val <= 100:
+        case val >= 6:
             return "Pantalassico, intera crosta ricoperta da oceani.";
-        case val > 100:
-            return "Tutta";
     }
 }
 
@@ -219,7 +394,7 @@ function naturalGasses() {
     return naturalResouces;
 }
 
-function naturalResouces() {
+function naturalResouces(biosfera) {
     let naturalResouces = naturalGasses();
 
     switch (rand(6) + 2) { // Minerali con elementi comuni
@@ -284,7 +459,9 @@ function naturalResouces() {
             naturalResouces.elementiRadioattivi = "Mediocre";
     }
 
-    switch (rand(8)) { // Risorse ecologiche e alimentari
+    switch (biosfera ? rand(8) : 0) { // Risorse ecologiche e alimentari
+        case 0:
+            naturalResouces.risorseEcologiche = "Nessuna";
         case 1:
             naturalResouces.risorseEcologiche = "Scevro";
             break;
@@ -318,7 +495,8 @@ function DensitàAtmosfera(d, bonus) {
         "Densa (1.7-2.7 atm) Vedi “Atmosfere Pericolose”",
         "Pesante (2.7+ atm) Vedi “Pressioni Estreme”",
     ]
-    return densità[rand((d - 1), 0) + (bonus ?? 0)];
+    let value = rand((d), 0) + (bonus ?? 0);
+    return densità[value < 6 ? value : 5];
 }
 
 function TipoAtmosfera(ideale, min) {
@@ -329,7 +507,7 @@ function TipoAtmosfera(ideale, min) {
         res = rand(10);
 
     if (ideale)
-        res = - 2;
+        res =- 2;
     switch (res) {
         case 1:
         case 2:
@@ -362,7 +540,7 @@ function AtmSerra(atm) {
         if (atm.tipo != "Standard")
             res += 2;
         if (atm.densità.includes("Rarefatta") || atm.densità.includes("Normale") || atm.densità.includes("Densa") || atm.densità.includes("Pesante"))
-            return res >= 6 ? true : false;
+            return res >= 6;
     }
     return false;
 }
@@ -373,22 +551,24 @@ function Temp(pianeta, ideale) {
         mod += 2;
     else
         mod -= 2;
-    switch (true) {
-        case pianeta.atmosfera.densità.includes("Assente"):
-            mod -= 4;
-            break;
-        case pianeta.atmosfera.densità.includes("Rarefatta"):
+    if(!(pianeta.pianeta && pianeta.pianeta.includes("Gassoso"))) {
+        switch (true) {
+            case pianeta.atmosfera.densità.includes("Assente"):
+                mod -= 4;
+                break;
+            case pianeta.atmosfera.densità.includes("Rarefatta"):
+                mod -= 2;
+                break;
+            case pianeta.atmosfera.densità.includes("Densa"):
+            case pianeta.atmosfera.densità.includes("Pesante"):
+                mod += 1;
+                break;
+        }
+        if (pianeta.atmosfera.opaca)
             mod -= 2;
-            break;
-        case pianeta.atmosfera.densità.includes("Densa"):
-        case pianeta.atmosfera.densità.includes("Pesante"):
-            mod += 1;
-            break;
+        if (pianeta.atmosfera.serra)
+            mod += 2;
     }
-    if (pianeta.atmosfera.opaca)
-        mod -= 2;
-    if (pianeta.atmosfera.serra)
-        mod += 2;
 
     let res = rand(10) + mod;
     switch (true) {
@@ -485,10 +665,11 @@ function generateSector() {
                 23: "Anomalie Gravitazionali",
                 24: "Anomalie Temporali"
             }
-            settore[i].peculiarità = objPeculiarita[rand(24, 2)];
+            if(rand(100) % 2 == 0)
+                settore[i].peculiarità = objPeculiarita[rand(12) + rand(12)];
 
             let stelle = [];
-            let dice, main;
+            let dice;
             for (let j = 1; j <= settore[i].Nstelle; j++) {
                 let stella = {};
                 let type = rand(100);
@@ -681,8 +862,8 @@ function generateSector() {
                 }
 
                 switch (true) {
-                    case settore[i].componenti[c].Nstelle == 1 && (settore[i].componenti[c].stellaPrimaria.sigla).includes("S"):
-                        settore[i].componenti[c].Npianeti = rand(12, 2);
+                    case settore[i].Nstelle == 1 && (settore[i].componenti[c].stellaPrimaria.sigla).includes("S"):
+                        settore[i].componenti[c].Npianeti = (rand(6) + rand(6));
                         break;
                     case settore[i].Nstelle == 2 && ((settore[i].componenti[c].stellaPrimaria.sigla).includes("S")):
                         settore[i].componenti[c].Npianeti = rand(8);    
@@ -692,155 +873,17 @@ function generateSector() {
                         break;
                 }   
 
-                let pianeti = {}
-                for (let k = 1; k <= settore[i].componenti[c].Npianeti; k++) {
-                    let dice = rand(10);
-                    let Sdice = rand(10);
-                    switch (true) {
-                        case dice <= 4:
-                            pianeti[k] = { pianeta: "Gassoso" };
-                            pianeti[k].radioattività = radioattività();
-                            pianeti[k].atmosfera = {
-                                tipo: TipoAtmosfera(5),
-                                densità: DensitàAtmosfera(3, 3),
-                                opaca: true,
-                            };
-                            pianeti[k].atmosfera.serra = AtmSerra(pianeti[k].atmosfera);
-                            pianeti[k].naturalResouces = naturalGasses();
-                            pianeti[k].peculiaritàAggiuntive = peculiaritàAggiuntive();
-                            switch (true) {
-                                case Sdice <= 2:
-                                    pianeti[k].tipo = "Nano Gassoso";
-                                    if (rand(100) <= 20)
-                                        pianeti[k].anelli = true;
-                                    else
-                                        pianeti[k].anelli = false;
-                                    pianeti[k].NSatellitiMaggiori = rand(3);
-                                    pianeti[k].SatellitiMinori = rand(12, 2);
-                                    break;
-                                case Sdice >= 3 && Sdice <= 6:
-                                    pianeti[k].tipo = "Gigante Ghiacciato";
-                                    if (rand(100) <= 35)
-                                        pianeti[k].anelli = true;
-                                    else
-                                        pianeti[k].anelli = false;
-                                    pianeti[k].NSatellitiMaggiori = rand(6);
-                                    pianeti[k].SatellitiMinori = rand(24, 4);
-                                    break;
-                                case Sdice >= 7 && Sdice <= 10:
-                                    pianeti[k].tipo = "Gigante Standard";
-                                    if (rand(2) == 1)
-                                        pianeti[k].anelli = true;
-                                    else
-                                        pianeti[k].anelli = false;
-                                    pianeti[k].NSatellitiMaggiori = rand(8);
-                                    pianeti[k].SatellitiMinori = rand(48, 6);
-                                    break;
-                            }
-                            break;
-                        case dice >= 5 && dice <= 8:
-                            pianeti[k] = { pianeta: "Terrestre" };
-                            pianeti[k].radioattività = radioattività();
-                            if (rand(100) >= 15)
-                                pianeti[k].anelli = true;
-                            else
-                                pianeti[k].anelli = false;
-
-                            pianeti[k].NSatellitiMaggiori = rand(2) - 1;
-                            pianeti[k].SatellitiMinori = rand(6);
-                            pianeti[k].naturalResouces = naturalResouces();
-                            pianeti[k].peculiaritàAggiuntive = peculiaritàAggiuntive();
-                            switch (true) {
-                                case Sdice <= 2:
-                                    pianeti[k].tipo = "Pianteta Ferroso";
-                                    pianeti[k].geologia = GeologiaTerrestri();
-                                    pianeti[k].atmosfera = {
-                                        tipo: TipoAtmosfera(),
-                                        densità: DensitàAtmosfera(6),
-                                        opaca: AtmOpaca(),
-                                    };
-                                    pianeti[k].atmosfera.serra = AtmSerra(pianeti[k].atmosfera);
-                                    break;
-                                case Sdice >= 3 && Sdice <= 7:
-                                    pianeti[k].tipo = "Pianeta Roccioso";
-                                    pianeti[k].geologia = GeologiaTerrestri();
-                                    pianeti[k].atmosfera = {
-                                        tipo: TipoAtmosfera(),
-                                        densità: DensitàAtmosfera(6),
-                                        opaca: AtmOpaca(),
-                                    };
-                                    pianeti[k].atmosfera.serra = AtmSerra(pianeti[k].atmosfera);
-                                    break;
-                                case Sdice >= 8 && Sdice <= 10:
-                                    pianeti[k].tipo = "Pianeta Oceanico";
-                                    pianeti[k].atmosfera = {
-                                        tipo: TipoAtmosfera(),
-                                        densità: DensitàAtmosfera(4, 2),
-                                        opaca: AtmOpaca(),
-                                    };
-                                    pianeti[k].atmosfera.serra = AtmSerra(pianeti[k].atmosfera);
-                                    break;
-                            }
-                            break;
-                        case dice >= 9 && dice <= 10:
-                            pianeti[k] = { pianeta: "Cintura di Asteroidi" };
-                            pianeti[k].PianetiNani = {};
-                            for (let f = 1; f <= rand(10); f++) {
-                                pianeti[k].PianetiNani[f] = {
-                                    geologia: GeologiaTerrestri(),
-                                    atmosfera: {
-                                        tipo: TipoAtmosfera(),
-                                        densità: DensitàAtmosfera(4),
-                                        opaca: AtmOpaca(),
-                                    },
-                                    naturalResouces: naturalResouces()
-                                }
-                                pianeti[k].PianetiNani[f].radioattività = radioattività();
-                                pianeti[k].PianetiNani[f].atmosfera.serra = AtmSerra(pianeti[k].atmosfera);
-                                pianeti[k].PianetiNani[f].temperatura = Temp(pianeti[k].PianetiNani[f], settore[i].componenti[c].orbitaIdeale);
-                                pianeti[k].PianetiNani[f].peculiaritàAggiuntive = peculiaritàAggiuntive();
-                            }
-                            break;
-                    }
-                    if (pianeti[k].pianeta != "Cintura di Asteroidi") {
-                        pianeti[k].temperatura = Temp(pianeti[k], settore[i].componenti[c].orbitaIdeale);
-                        pianeti[k].idrosfera = idrosfera(pianeti[k], settore[i].componenti[c].orbitaIdeale);
-                        pianeti[k].SatellitiMaggiori = [];
-                        for(let s = 0; s < pianeti[k].NSatellitiMaggiori; s++) {
-                            pianeti[k].SatellitiMaggiori[s] = {
-                                geologia: GeologiaTerrestri(),
-                                atmosfera: {
-                                    tipo: TipoAtmosfera(),
-                                    densità: DensitàAtmosfera(4),
-                                    opaca: AtmOpaca(),
-                                },
-                                naturalResouces: naturalResouces()
-                            }
-                            pianeti[k].SatellitiMaggiori[s].radioattività = radioattività();
-                            pianeti[k].SatellitiMaggiori[s].atmosfera.serra = AtmSerra(pianeti[k].atmosfera);
-                            pianeti[k].SatellitiMaggiori[s].temperatura = Temp(pianeti[k].SatellitiMaggiori[s], settore[i].componenti[c].orbitaIdeale);
-                            pianeti[k].SatellitiMaggiori[s].peculiaritàAggiuntive = peculiaritàAggiuntive();
-                        }
-                    }
-                }
                 let assegnati = 0;
+                settore[i].componenti[c].pianeti = [];
                 for (let orbita = settore[i].componenti[c].orbitaMinima; assegnati < settore[i].componenti[c].Npianeti; orbita++) {
+                    let planet;
                     if (rand(8) >= 4) {
                         assegnati++;
-                        pianeti[assegnati].orbita = orbita;
-                        if (pianeti[assegnati].pianeta == "Cintura di Asteroidi") {
-                            for (let f = 1; f <= Object.keys(pianeti[assegnati].PianetiNani).length; f++) {
-                                pianeti[assegnati].PianetiNani[f].idrosfera = idrosfera((pianeti[assegnati].PianetiNani[f]), settore[i].componenti[c].orbitaIdeale, orbita);
-                                pianeti[assegnati].PianetiNani[f].biosfera = biosfera(pianeti[assegnati].PianetiNani[f]);
-                            }
-                        } else if (pianeti[assegnati].pianeta != "Gassoso") {
-                            pianeti[assegnati].idrosfera = idrosfera(pianeti[assegnati], settore[i].componenti[c].orbitaIdeale, orbita);
-                            pianeti[assegnati].biosfera = biosfera(pianeti[assegnati]);
-                        }
-
+                        planet = createPlanet(settore[i].orbitaIdeale, orbita);
+                        planet.orbita = orbita;
+                        settore[i].componenti[c].pianeti.push(planet);
                     }
                 }
-                settore[i].componenti[c].pianeti = pianeti;
             }
         }
     }
@@ -851,8 +894,8 @@ function generateSector() {
     } else {
         // file written successfully
     }
-    });
-
+    });    
+    
     return settore;
 }
 
